@@ -5,6 +5,10 @@
 import os, sys, configparser, subprocess, threading, shutil
 import tkinter as tk
 from tkinter import messagebox
+
+from ensure_deps import ensure   # 先自动检查/安装缺失依赖
+ensure()
+
 import customtkinter as ctk
 
 BASE = os.path.dirname(os.path.abspath(__file__))
