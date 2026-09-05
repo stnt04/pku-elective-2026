@@ -16,8 +16,7 @@ CONFIG = os.path.join(BASE, 'config.ini')
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
-# 去掉 CTkTabview 标签头那条默认 3px 的描边（类属性写死，需在创建前改）
-ctk.CTkTabview._segmented_button_border_width = 0
+# 顶部标签采用自定义栏（不用 CTkTabview 自带段按钮），规避其接缝/描边
 
 
 class App(ctk.CTk):
@@ -64,20 +63,35 @@ class App(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        tab = ctk.CTkTabview(self, width=760, height=470,
-                             corner_radius=24, border_width=0)
-        tab.grid(row=0, column=0, padx=12, pady=(6, 0), sticky='nsew')
-        try:  # 去边框线 + 标签头底色与内容一致（消除色带/对比线）
-            tab._segmented_button.configure(
-                border_width=0,
-                fg_color=self._apply_appearance_mode(tab.cget('fg_color')))
-            tab._configure_segmented_button_background_corners()
-        except Exception:
-            pass
-        tab.add("登录信息"); tab.add("目标课程"); tab.add("运行参数"); tab.add("高级")
+        # --- 顶部自定义标签栏（不用 CTkTabview 自带段按钮，规避其接缝/描边）---
+        nav = ctk.CTkFrame(self, corner_radius=14)
+        nav.grid(row=0, column=0, padx=12, pady=(6, 0), sticky='nsew')
+        nav.grid_columnconfigure(0, weight=1)
+        nav.grid_rowconfigure(1, weight=1)
+
+        self._tabnames = ["登录信息", "目标课程", "运行参数", "高级"]
+        self._tab_buttons, self._tab_frames = {}, {}
+
+        header = ctk.CTkFrame(nav, fg_color="transparent")
+        header.grid(row=0, column=0, sticky='ew', padx=14, pady=(12, 2))
+        content = ctk.CTkFrame(nav, fg_color="transparent")
+        content.grid(row=1, column=0, sticky='nsew', padx=2, pady=2)
+        content.grid_columnconfigure(0, weight=1)
+        content.grid_rowconfigure(0, weight=1)
+        for i, name in enumerate(self._tabnames):
+            tf = ctk.CTkFrame(content, fg_color="transparent")
+            tf.grid(row=0, column=0, sticky='nsew')
+            self._tab_frames[name] = tf
+            btn = ctk.CTkButton(header, text=name, height=30, corner_radius=14,
+                                fg_color="transparent", hover_color="#2b2b2b",
+                                text_color="gray70",
+                                command=lambda n=name: self._select_tab(n))
+            btn.grid(row=0, column=i, padx=6, pady=4)
+            self._tab_buttons[name] = btn
+        self._select_tab(self._tabnames[0])
 
         # --- 登录信息 ---
-        f = tab.tab("登录信息")
+        f = self._tab_frames["登录信息"]
         f.grid_columnconfigure(1, weight=1)
         rows = [
             ("学号", "student_id", "text"),
@@ -100,7 +114,7 @@ class App(ctk.CTk):
                      text_color="gray60", anchor="w").grid(row=4, column=0, columnspan=2, padx=14, pady=12, sticky='w')
 
         # --- 目标课程 ---
-        fc = tab.tab("目标课程")
+        fc = self._tab_frames["目标课程"]
         fc.grid_columnconfigure(0, weight=1)
         fc.grid_rowconfigure(1, weight=1)
         head = ctk.CTkFrame(fc)
@@ -121,7 +135,7 @@ class App(ctk.CTk):
         self.sel_course = ctk.IntVar(value=0)
 
         # --- 运行参数 ---
-        fr = tab.tab("运行参数")
+        fr = self._tab_frames["运行参数"]
         fr.grid_columnconfigure(0, weight=1)
         fr.grid_columnconfigure(2, weight=1)
         numeric = [
@@ -154,7 +168,7 @@ class App(ctk.CTk):
             self.bool_cb[key] = cb
 
         # --- 高级 ---
-        fa = tab.tab("高级")
+        fa = self._tab_frames["高级"]
         fa.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(fa, text="监控服务 (monitor)", anchor="w").grid(row=0, column=0, padx=16, pady=(14, 4), sticky='w')
         self.mon_host = ctk.CTkEntry(fa, width=200)
@@ -169,17 +183,21 @@ class App(ctk.CTk):
                      text_color="gray60", anchor="w").grid(row=3, column=0, columnspan=2, padx=16, pady=4, sticky='w')
 
         # --- 底部按钮（横向滚动，放不下才显示滚动条）---
-        btns = ctk.CTkFrame(self)
+        # 圆角与顶部 tabview 保持一致（14），避免上下观感不一致
+        btns = ctk.CTkFrame(self, corner_radius=14)
         btns.grid(row=1, column=0, sticky='ew', padx=12, pady=12)
         btns.grid_columnconfigure(0, weight=1)
         frame_color = self._apply_appearance_mode(btns.cget('fg_color'))
         canvas = tk.Canvas(btns, height=52, highlightthickness=0, bd=0, bg=frame_color)
-        xsb = tk.Scrollbar(btns, orient='horizontal', command=canvas.xview)
-        canvas.configure(xscrollcommand=xsb.set)
         canvas.grid(row=0, column=0, sticky='ew', padx=(6, 0))
-        xsb.grid(row=1, column=0, sticky='ew', padx=(6, 0))
         inner = ctk.CTkFrame(canvas, fg_color="transparent")
         canvas.create_window((0, 0), window=inner, anchor='nw')
+
+        # 横向滚动条：改用 CTkScrollbar（深色自适应、无白色底座），放到按钮下方并留出间距，不遮挡按钮
+        xsb = ctk.CTkScrollbar(btns, orientation='horizontal', command=canvas.xview,
+                               height=13, corner_radius=8, border_spacing=0)
+        canvas.configure(xscrollcommand=xsb.set)
+        xsb.grid(row=1, column=0, sticky='ew', padx=(6, 0), pady=(8, 0))
 
         self._btn_labels = [("保存配置", self.save), ("开始选课", self.launch), ("运行状态", self.view_status),
                             ("停止任务", self.stop_task), ("清理日志", self.clear_log),
@@ -194,10 +212,15 @@ class App(ctk.CTk):
 
         def refresh_scroll(event=None):
             inner.update_idletasks()
+            # canvas 高度随内容自适应：默认 52 但按钮实际可能更高（高DPI缩放），
+            # 否则按钮底部（含圆角）会被 canvas 裁掉，造成上下圆角不一致
+            h = inner.winfo_reqheight()
+            if canvas.winfo_height() != h:
+                canvas.configure(height=h)
             canvas.configure(scrollregion=canvas.bbox('all'))
             if inner.winfo_reqwidth() > canvas.winfo_width():
                 if not xsb.winfo_ismapped():
-                    xsb.grid()
+                    xsb.grid(row=1, column=0, sticky='ew', padx=(6, 0), pady=(8, 0))
             else:
                 if xsb.winfo_ismapped():
                     xsb.grid_remove()
@@ -221,6 +244,19 @@ class App(ctk.CTk):
             sel = ctk.CTkRadioButton(row, text="", variable=self.sel_course, value=idx, width=24)
             sel.grid(row=0, column=3, padx=4)
             self._row_widgets[idx] = {'name': e_name, 'class': e_class, 'school': e_school}
+
+    def _select_tab(self, name):
+        """切换顶部标签页：仅显示选中页，并刷新标签按钮的选中样式。"""
+        for n, f in self._tab_frames.items():
+            if n == name:
+                f.grid(row=0, column=0, sticky='nsew')
+            else:
+                f.grid_remove()
+        for n, b in self._tab_buttons.items():
+            sel = (n == name)
+            b.configure(fg_color="#1F6AA5" if sel else "transparent",
+                        text_color="#FFFFFF" if sel else "gray70",
+                        hover_color="#1A5A91" if sel else "#2b2b2b")
 
     def add_course(self):
         self._courses.append({'id': '', 'name': '', 'klass': '', 'school': ''})
@@ -315,11 +351,14 @@ class App(ctk.CTk):
         def run():
             try:
                 flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)  # 不弹出控制台窗口
+                # 强制定位子进程 stdout 为 UTF-8：否则 Windows 管道默认用 GBK(cp936)，日志里的中文会乱码
+                env = dict(os.environ, PYTHONIOENCODING='utf-8', PYTHONUTF8='1')
                 use_log = self.log_enabled.get()
                 if use_log:
                     self.proc = subprocess.Popen([sys.executable, os.path.join(BASE, 'main.py')],
                                                  cwd=BASE, stdout=subprocess.PIPE,
-                                                 stderr=subprocess.STDOUT, creationflags=flags)
+                                                 stderr=subprocess.STDOUT,
+                                                 creationflags=flags, env=env)
                     # 读取输出写入日志，防止管道阻塞
                     with open(os.path.join(BASE, 'log', 'run.log'), 'wb') as logf:
                         for line in iter(self.proc.stdout.readline, b''):
@@ -329,7 +368,8 @@ class App(ctk.CTk):
                     # 不记录日志：丢弃输出
                     self.proc = subprocess.Popen([sys.executable, os.path.join(BASE, 'main.py')],
                                                  cwd=BASE, stdout=subprocess.DEVNULL,
-                                                 stderr=subprocess.DEVNULL, creationflags=flags)
+                                                 stderr=subprocess.DEVNULL,
+                                                 creationflags=flags, env=env)
                 rc = self.proc.wait()
                 self.after(0, lambda rc=rc: self.notify_done(rc))
             except Exception as e:
@@ -381,7 +421,18 @@ class App(ctk.CTk):
                 return
             p = os.path.join(BASE, 'log', 'run.log')
             try:
-                data = open(p, encoding='utf-8', errors='replace').read() if os.path.exists(p) else "(暂无日志)"
+                if os.path.exists(p):
+                    raw = open(p, 'rb').read()  # 自动识别历史老日志(GBK)与新日志(UTF-8)的编码
+                    for enc in ('utf-8', 'gbk'):
+                        try:
+                            data = raw.decode(enc)
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    else:
+                        data = raw.decode('utf-8', errors='replace')
+                else:
+                    data = "(暂无日志)"
             except Exception as e:
                 data = "读取日志失败：%s" % e
             box.delete('1.0', 'end')
